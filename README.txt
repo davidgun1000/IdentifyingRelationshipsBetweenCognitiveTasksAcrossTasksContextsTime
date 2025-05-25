@@ -1,6 +1,6 @@
 ### READ ME FIRST ###
 
-This OSF page contains Matlab code to estimate the cognitive models reported in:
+This page contains Matlab code to estimate the cognitive models reported in:
 
 Wall et al. Identifying relationships between cognitive processes across tasks, contexts, and time.
 
