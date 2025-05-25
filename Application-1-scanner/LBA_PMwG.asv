@@ -1,0 +1,305 @@
+% estimating the hierarchical LBA model for the Forstmann (2008) dataset
+% The LBA specification can be found in the paper: New Estimation
+% approaches for the linear Ballistic Accumulator Model
+
+load('LBA_realdata.mat'); %load the dataset 
+num_subjects=length(data.rt); %number of subjects in the experiments
+for j=1:num_subjects
+    num_trials(j,1)=length(data.rt{j,1}); %computing the number of trials per subject
+end
+num_particles=1000; %number of particles in the conditional Monte Carlo algorithm
+parpool(28) %number of processors
+
+%initial values of the hyperparameters for lower level parameters
+
+num_randeffect=7; %the total number of random effects in the LBA model. For Forstmann dataset, we have 7 random effects.
+
+
+theta_b1_mu=0.2695;
+theta_b2_mu=0.2116;
+theta_b3_mu=-0.0241;
+theta_A_mu=-0.4017;
+theta_v1_mu=0.2978;
+theta_v2_mu=1.1230;
+theta_tau_mu=-1.7128;
+
+param.theta_mu=[theta_b1_mu;theta_b2_mu;theta_b3_mu;theta_A_mu;theta_v1_mu;theta_v2_mu;theta_tau_mu];
+param.theta_sig2=param_init_sig2;
+
+param.sv=1;
+param.num_randeffect=7;
+
+num_choice=2;
+burn=500;
+nit=10000;
+s=100000;
+
+prior_mu_mean=zeros(num_randeffect,1);
+prior_mu_sig2=eye(num_randeffect);
+
+v_half=2;
+A_half=1;
+[theta_latent_b1,theta_latent_b2,theta_latent_b3,theta_latent_A,theta_latent_v1,theta_latent_v2,theta_latent_tau]=LBA_MC_IS_orig_real_log(data,param,num_subjects,num_trials,5000);
+tot_param=42; %total number of parameters for each subjects
+a1_half=1./random('gam',1/2,1);
+a2_half=1./random('gam',1/2,1);
+a3_half=1./random('gam',1/2,1);
+a4_half=1./random('gam',1/2,1);
+a5_half=1./random('gam',1/2,1);
+a6_half=1./random('gam',1/2,1);
+a7_half=1./random('gam',1/2,1);
+count=zeros(1,num_subjects);
+mean_theta=zeros(num_subjects,tot_param);
+covmat_theta=zeros(tot_param,tot_param,num_subjects);
+tic
+temp=1;
+i=1;
+while i<=s
+    i
+    
+    
+    %sample mu
+    
+    var_mu=inv(num_subjects*inv(param.theta_sig2)+inv(prior_mu_sig2));
+    mean_mu=var_mu*(inv(param.theta_sig2)*[sum(theta_latent_b1);sum(theta_latent_b2);sum(theta_latent_b3);sum(theta_latent_A);sum(theta_latent_v1);sum(theta_latent_v2);sum(theta_latent_tau)]);
+    chol_var_mu=chol(var_mu,'lower');
+    param.theta_mu=mvnrnd(mean_mu,chol_var_mu*chol_var_mu');
+    
+    %sample sigma
+    k_half=v_half+num_randeffect-1+num_subjects;
+    cov_temp=zeros(num_randeffect,num_randeffect);
+    for j=1:num_subjects
+        theta_j=[theta_latent_b1(j,1);theta_latent_b2(j,1);theta_latent_b3(j,1);theta_latent_A(j,1);theta_latent_v1(j,1);theta_latent_v2(j,1);theta_latent_tau(j,1)];
+        cov_temp=cov_temp+(theta_j-param.theta_mu')*(theta_j-param.theta_mu')';
+    end
+    
+    %alternative
+    %theta_latent=[theta_latent_b1';theta_latent_b2';theta_latent_b3';theta_latent_A';theta_latent_v1';theta_latent_v2';theta_latent_tau'];
+    %theta_latent_minus_mu=theta_latent-param.theta_mu';
+    %theta_latent_minus_mu_reshape=reshape(theta_latent_minus_mu,num_randeffect,1,num_subjects);
+    %theta_latent_minus_mu_reshape_transpose=multitransp(theta_latent_minus_mu_reshape);
+    %cov_temp2=sum(multiprod(theta_latent_minus_mu_reshape,theta_latent_minus_mu_reshape_transpose),3);
+    
+    B_half=2*v_half*diag([1/a1_half;1/a2_half;1/a3_half;1/a4_half;1/a5_half;1/a6_half;1/a7_half])+cov_temp;
+    param.theta_sig2=iwishrnd(B_half,k_half);
+    
+    theta_sig2_inv=inv(param.theta_sig2);
+
+    %sample a1,...,ap
+    v1_half=(v_half+num_randeffect)/2;
+    s1_half=(v_half*theta_sig2_inv(1,1)+A_half);
+    a1_half=1./random('gam',v1_half,1/s1_half);
+
+    v2_half=(v_half+num_randeffect)/2;
+    s2_half=(v_half*theta_sig2_inv(2,2)+A_half);
+    a2_half=1./random('gam',v2_half,1/s2_half);
+    
+    v3_half=(v_half+num_randeffect)/2;
+    s3_half=(v_half*theta_sig2_inv(3,3)+A_half);
+    a3_half=1./random('gam',v3_half,1/s3_half);
+
+    v4_half=(v_half+num_randeffect)/2;
+    s4_half=(v_half*theta_sig2_inv(4,4)+A_half);
+    a4_half=1./random('gam',v4_half,1/s4_half);
+
+    v5_half=(v_half+num_randeffect)/2;
+    s5_half=(v_half*theta_sig2_inv(5,5)+A_half);
+    a5_half=1./random('gam',v5_half,1/s5_half);
+
+    v6_half=(v_half+num_randeffect)/2;
+    s6_half=(v_half*theta_sig2_inv(6,6)+A_half);
+    a6_half=1./random('gam',v6_half,1/s6_half);
+
+    v7_half=(v_half+num_randeffect)/2;
+    s7_half=(v_half*theta_sig2_inv(7,7)+A_half);
+    a7_half=1./random('gam',v7_half,1/s7_half);
+    
+   % training the proposals 
+   if sum(count>50)==num_subjects
+         for j=1:num_subjects 
+             theta=[theta_latent_b1_store(burn:end,j),theta_latent_b2_store(burn:end,j),theta_latent_b3_store(burn:end,j),...
+             theta_latent_A_store(burn:end,j),theta_latent_v1_store(burn:end,j),theta_latent_v2_store(burn:end,j),theta_latent_tau_store(burn:end,j),...
+             theta_mu_store(burn:end,:),chol_theta_sig2_store1(burn:end,:),chol_theta_sig2_store2(burn:end,:),chol_theta_sig2_store3(burn:end,:),chol_theta_sig2_store4(burn:end,:),chol_theta_sig2_store5(burn:end,:),...
+             chol_theta_sig2_store6(burn:end,:),chol_theta_sig2_store7(burn:end,:)];
+             covmat_theta(:,:,j)=cov(theta);
+             covmat_theta(:,:,j)=topdm(covmat_theta(:,:,j));
+             mean_theta(j,:)=mean(theta);
+         end           
+   end
+   
+   if sum(count>50)==num_subjects
+      num_particles=100; 
+      t(temp,1)=i;
+      s=t(1,1)+nit;
+      temp=temp+1;
+   end
+   %conditional Monte Carlo algorithm 
+   [theta_latent_b1,theta_latent_b2,theta_latent_b3,theta_latent_A,theta_latent_v1,theta_latent_v2,theta_latent_tau]=LBA_MC_IS_cond_orig_real_log_prop_usedmixchol2(data,param,...
+        theta_latent_b1,theta_latent_b2,theta_latent_b3,theta_latent_A,theta_latent_v1,theta_latent_v2,theta_latent_tau,...
+        num_subjects,num_trials,num_particles,mean_theta,covmat_theta,i,count,burn);
+    
+    chol_theta_sig2=chol(param.theta_sig2,'lower');
+    chol_theta_sig2_store1(i,:)=log(chol_theta_sig2(1,1));
+    chol_theta_sig2_store2(i,:)=[chol_theta_sig2(2,1),log(chol_theta_sig2(2,2))];
+    chol_theta_sig2_store3(i,:)=[chol_theta_sig2(3,1:2),log(chol_theta_sig2(3,3))];
+    chol_theta_sig2_store4(i,:)=[chol_theta_sig2(4,1:3),log(chol_theta_sig2(4,4))];
+    chol_theta_sig2_store5(i,:)=[chol_theta_sig2(5,1:4),log(chol_theta_sig2(5,5))];
+    chol_theta_sig2_store6(i,:)=[chol_theta_sig2(6,1:5),log(chol_theta_sig2(6,6))];
+    chol_theta_sig2_store7(i,:)=[chol_theta_sig2(7,1:6),log(chol_theta_sig2(7,7))];
+  
+    theta_mu_store(i,:)=param.theta_mu';
+    theta_sig2_store1(i,:)=param.theta_sig2(1,:);
+    theta_sig2_store2(i,:)=param.theta_sig2(2,2:end);
+    theta_sig2_store3(i,:)=param.theta_sig2(3,3:end);
+    theta_sig2_store4(i,:)=param.theta_sig2(4,4:end);
+    theta_sig2_store5(i,:)=param.theta_sig2(5,5:end);
+    theta_sig2_store6(i,:)=param.theta_sig2(6,6:end);
+    theta_sig2_store7(i,:)=param.theta_sig2(7,7);
+    
+    theta_latent_b1_store(i,:)=theta_latent_b1';
+    theta_latent_b2_store(i,:)=theta_latent_b2';
+    theta_latent_b3_store(i,:)=theta_latent_b3';
+    theta_latent_A_store(i,:)=theta_latent_A';
+    theta_latent_v1_store(i,:)=theta_latent_v1';
+    theta_latent_v2_store(i,:)=theta_latent_v2';
+    theta_latent_tau_store(i,:)=theta_latent_tau';
+    
+    if i>burn
+      for j=1:num_subjects
+          count(1,j)=size(unique(theta_latent_A_store(burn:end,j)),1);
+      end
+      
+    end
+    %save the output to your directory
+     if i==500 | i==1000 | i==2000 | i==3000 | i==4000 | i==5000 | i==6000 | i==7000 | i==8000 | i==9000 | i==10000 | i==20000 | i==30000 | i==40000 | i==50000 | i==60000 | i==70000 | i==80000 | i==90000 | i==100000
+        save('/srv/scratch/z3512791/LBA_real_PG_log_halft1_propN_adaptmixchol3_2.mat','theta_mu_store','theta_sig2_store1','theta_sig2_store2','theta_sig2_store3','theta_sig2_store4',...
+             'theta_sig2_store5','theta_sig2_store6','theta_sig2_store7','theta_latent_b1_store','theta_latent_b2_store','theta_latent_b3_store',...
+             'theta_latent_A_store','theta_latent_v1_store','theta_latent_v2_store','theta_latent_tau_store'); 
+     end
+     i=i+1;   
+end
+
+toc
+CPU_time=toc;
+%save the output to your directory
+save('/srv/scratch/z3512791/LBA_real_PG_log_halft1_propN_adaptmixchol3_2.mat','theta_mu_store','theta_sig2_store1','theta_sig2_store2','theta_sig2_store3','theta_sig2_store4',...
+             'theta_sig2_store5','theta_sig2_store6','theta_sig2_store7','theta_latent_b1_store','theta_latent_b2_store','theta_latent_b3_store',...
+             'theta_latent_A_store','theta_latent_v1_store','theta_latent_v2_store','theta_latent_tau_store','CPU_time'); 
+     
+   
+
+
+%covmat1=cov([log(b1_sig2_store(60001:end)),log(A_sig2_store(60001:end)),log(v1_sig2_store(60001:end)),log(v2_sig2_store(60001:end)),log(tau_sig2_store(60001:end)),log(b1_mu_store(60001:end)),log(A_mu_store(60001:end)),...    
+%    log(v1_mu_store(60001:end)),log(v2_mu_store(60001:end)),log(tau_mu_store(60001:end))]);
+%covmat1_1=[covmat1(1:2,1:2),covmat1(1:2,6:7);covmat1(6:7,1:2),covmat1(6:7,6:7)];
+%covmat2_2=[covmat1(3:5,3:5),covmat1(3:5,8:10);covmat1(8:10,3:5),covmat1(8:10,8:10)];
+
+
+
+
+% save('sim2.mat','b_mu_store','b_sig2_store','A_mu_store','A_sig2_store','v1_mu_store','v1_sig2_store','v2_mu_store','v2_sig2_store','latent_b_store','latent_A_store','latent_v1_store','latent_v2_store');
+%---random walks
+    %sample b_mu and b_sig2
+%     prior_b=trunc_norm_logpdf(theta.b_mu,prior.b_mu_mean,prior.b_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(theta.b_sig2,prior.b_sig2_v1,prior.b_sig2_s1));
+%     lik_b=sum(trunc_norm_logpdf(latent_b,theta.b_mu,theta.b_sig2,theta.left_truncation,theta.right_truncation));
+%     post_b=prior_b+lik_b;
+%     jac_b=log(1/theta.b_mu)+log(1/theta.b_sig2);
+%     theta_prop_b=[log(theta.b_mu),log(theta.b_sig2)];
+%     R1=mvnrnd(theta_prop_b,V1_b);
+%     b_mu_star=exp(R1(1,1));
+%     b_sig2_star=exp(R1(1,2));
+%     prior_b_star=trunc_norm_logpdf(b_mu_star,prior.b_mu_mean,prior.b_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(b_sig2_star,prior.b_sig2_v1,prior.b_sig2_s1));
+%     lik_b_star=sum(trunc_norm_logpdf(latent_b,b_mu_star,b_sig2_star,theta.left_truncation,theta.right_truncation));
+%     post_b_star=prior_b_star+lik_b_star;
+%     jac_b_star=log(1/b_mu_star)+log(1/b_sig2_star);
+%     r1 = exp(post_b_star-post_b+jac_b-jac_b_star);
+%     C1 = min(1,r1);
+%     A1=rand();
+%     if A1<=C1
+%         theta.b_mu=b_mu_star;
+%         theta.b_sig2=b_sig2_star; 
+%         accept_b=accept_b+1;
+%     end
+%     thetasave_b(i,:)=theta_prop_b;
+%     if i>50
+%        V1_b=cov(thetasave_b(1:i,:)); 
+%     end
+%     
+%     %sample A_mu and A_sig2
+%     prior_A=trunc_norm_logpdf(theta.A_mu,prior.A_mu_mean,prior.A_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(theta.A_sig2,prior.A_sig2_v1,prior.A_sig2_s1));
+%     lik_A=sum(trunc_norm_logpdf(latent_A,theta.A_mu,theta.A_sig2,theta.left_truncation,theta.right_truncation));
+%     post_A=prior_A+lik_A;
+%     jac_A=log(1/theta.A_mu)+log(1/theta.A_sig2);
+%     theta_prop_A=[log(theta.A_mu),log(theta.A_sig2)];
+%     R1=mvnrnd(theta_prop_A,V1_A);
+%     A_mu_star=exp(R1(1,1));
+%     A_sig2_star=exp(R1(1,2));
+%     prior_A_star=trunc_norm_logpdf(A_mu_star,prior.A_mu_mean,prior.A_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(A_sig2_star,prior.A_sig2_v1,prior.A_sig2_s1));
+%     lik_A_star=sum(trunc_norm_logpdf(latent_A,A_mu_star,A_sig2_star,theta.left_truncation,theta.right_truncation));
+%     post_A_star=prior_A_star+lik_A_star;
+%     jac_A_star=log(1/A_mu_star)+log(1/A_sig2_star);
+%     r1 = exp(post_A_star-post_A+jac_A-jac_A_star);
+%     C1 = min(1,r1);
+%     A1=rand();
+%     if A1<=C1
+%         theta.A_mu=A_mu_star;
+%         theta.A_sig2=A_sig2_star; 
+%         accept_A=accept_A+1;
+%     end
+%     thetasave_A(i,:)=theta_prop_A;
+%     if i>50
+%        V1_A=cov(thetasave_A(1:i,:)); 
+%     end
+    
+    %sample v1_mu and v1_sig2
+%     prior_v1=trunc_norm_logpdf(theta.v1_mu,prior.v1_mu_mean,prior.v1_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(theta.v1_sig2,prior.v1_sig2_v1,prior.v1_sig2_s1));
+%     lik_v1=sum(trunc_norm_logpdf(latent_v1,theta.v1_mu,theta.v1_sig2,theta.left_truncation,theta.right_truncation));
+%     post_v1=prior_v1+lik_v1;
+%     jac_v1=log(1/theta.v1_mu)+log(1/theta.v1_sig2);
+%     theta_prop_v1=[log(theta.v1_mu),log(theta.v1_sig2)];
+%     R1=mvnrnd(theta_prop_v1,V1_v1);
+%     v1_mu_star=exp(R1(1,1));
+%     v1_sig2_star=exp(R1(1,2));
+%     prior_v1_star=trunc_norm_logpdf(v1_mu_star,prior.v1_mu_mean,prior.v1_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(v1_sig2_star,prior.v1_sig2_v1,prior.v1_sig2_s1));
+%     lik_v1_star=sum(trunc_norm_logpdf(latent_v1,v1_mu_star,v1_sig2_star,theta.left_truncation,theta.right_truncation));
+%     post_v1_star=prior_v1_star+lik_v1_star;
+%     jac_v1_star=log(1/v1_mu_star)+log(1/v1_sig2_star);
+%     r1 = exp(post_v1_star-post_v1+jac_v1-jac_v1_star);
+%     C1 = min(1,r1);
+%     A1 = rand();
+%     if A1<=C1
+%         theta.v1_mu=v1_mu_star;
+%         theta.v1_sig2=v1_sig2_star; 
+%         accept_v1=accept_v1+1;
+%     end
+%     thetasave_v1(i,:)=theta_prop_v1;
+%     if i>50
+%        V1_v1=cov(thetasave_v1(1:i,:)); 
+%     end
+% %     
+%     %sample v2_mu and v2_sig2
+%     prior_v2=trunc_norm_logpdf(theta.v2_mu,prior.v2_mu_mean,prior.v2_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(theta.v2_sig2,prior.v2_sig2_v1,prior.v2_sig2_s1));
+%     lik_v2=sum(trunc_norm_logpdf(latent_v2,theta.v2_mu,theta.v2_sig2,theta.left_truncation,theta.right_truncation));
+%     post_v2=prior_v2+lik_v2;
+%     jac_v2=log(1/theta.v2_mu)+log(1/theta.v2_sig2);
+%     theta_prop_v2=[log(theta.v2_mu),log(theta.v2_sig2)];
+%     R1=mvnrnd(theta_prop_v2,V1_v2);
+%     v2_mu_star=exp(R1(1,1));
+%     v2_sig2_star=exp(R1(1,2));
+%     prior_v2_star=trunc_norm_logpdf(v2_mu_star,prior.v2_mu_mean,prior.v2_mu_sig2,theta.left_truncation,theta.right_truncation)+log(gampdf(v2_sig2_star,prior.v2_sig2_v1,prior.v2_sig2_s1));
+%     lik_v2_star=sum(trunc_norm_logpdf(latent_v2,v2_mu_star,v2_sig2_star,theta.left_truncation,theta.right_truncation));
+%     post_v2_star=prior_v2_star+lik_v2_star;
+%     jac_v2_star=log(1/v2_mu_star)+log(1/v2_sig2_star);
+%     r1 = exp(post_v2_star-post_v2+jac_v2-jac_v2_star);
+%     C1 = min(1,r1);
+%     A1 = rand();
+%     if A1<=C1
+%         theta.v2_mu=v2_mu_star;
+%         theta.v2_sig2=v2_sig2_star; 
+%         accept_v2=accept_v2+1;
+%     end
+%     thetasave_v2(i,:)=theta_prop_v2;
+%     if i>50
+%        V1_v2=cov(thetasave_v2(1:i,:)); 
+%     end
+
